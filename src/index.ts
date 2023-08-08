@@ -12,6 +12,7 @@ interface User {
     name: string;
     screenName: string;
     statusesCount: number;
+    tweets: Tweet[]
   }
   
   interface Tweet {
@@ -19,12 +20,12 @@ interface User {
     likes: number;
     text: string;
     userId: string;
+    user: User
   }
 
 const typeDefs = gql`
     # Twitter User
     type User {
-        documentID: ID!
         id: ID!
         screenName: String!
         statusesCount: Int!
@@ -43,6 +44,7 @@ const typeDefs = gql`
     type Query {
         tweets: [Tweets]
         user(id: String!): User
+        users: [User]
     }
 
     type Mutation {
@@ -55,7 +57,9 @@ const resolvers = {
         async tweets(user) {
             try {
                 const userTweets = await admin.firestore().collection('tweets').where('userId', '==', user.id).get()
-                return userTweets.docs.map(tweet => tweet.data()) as Tweet[]
+                return userTweets.docs.map(tweet => {
+                    return {...tweet.data(), id: tweet.id}
+                }) as Tweet[]
             } catch (error) {
                 throw new ApolloError(error)
             }
@@ -65,7 +69,7 @@ const resolvers = {
         async user(tweet) {
             try {
                 const tweetAuthor = await admin.firestore().doc(`users/${tweet.userId}`).get()
-                return tweetAuthor.data() as User
+                return {...tweetAuthor.data(), id: tweetAuthor.id} as User
             } catch (error) {
                 throw new ApolloError(error)
             }
@@ -74,13 +78,25 @@ const resolvers = {
     Query: {
         async tweets () {
             const tweets = await admin.firestore().collection('tweets').get()
-            return tweets.docs.map(tweet => tweet.data() as Tweet[])
+            return tweets.docs.map(tweet => {
+                return {... tweet.data() as Tweet[], id: tweet.id}
+            })
         },
         async user(_: null, args: {id: string}) {
             try {
                 const userDoc = await admin.firestore().doc(`users/${args.id}`).get()
-                const user = userDoc.data() as User | undefined
+                const user = {...userDoc.data(), id: userDoc.id} as User | undefined
                 return user || new ValidationError('User ID not found')
+            } catch (error) {
+                throw new ApolloError(error)
+            }
+        },
+        async users() {
+            try {
+                const allUsers = await admin.firestore().collection('users').get()
+                return allUsers.docs.map((user) => {
+                    return {...user.data(), id: user.id}
+                })
             } catch (error) {
                 throw new ApolloError(error)
             }
@@ -96,7 +112,7 @@ const resolvers = {
                 await tweetRef.update({likes: tweet.likes + 1})
 
                 tweetDoc = await tweetRef.get()
-                return tweetDoc.data()
+                return {... tweetDoc.data(), id: tweetDoc.id}
             } catch (error) {
                 throw new ApolloError(error)
             }
