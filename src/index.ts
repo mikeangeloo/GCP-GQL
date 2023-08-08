@@ -24,6 +24,7 @@ interface User {
 const typeDefs = gql`
     # Twitter User
     type User {
+        documentID: ID!
         id: ID!
         screenName: String!
         statusesCount: Int!
@@ -42,6 +43,10 @@ const typeDefs = gql`
     type Query {
         tweets: [Tweets]
         user(id: String!): User
+    }
+
+    type Mutation {
+        likeTweet(id: ID!): Tweets
     }
 `
 
@@ -80,7 +85,23 @@ const resolvers = {
                 throw new ApolloError(error)
             }
         }
-    }   
+    },
+    Mutation: {
+        likeTweet: async (_, args: {id: string}) => {
+            try {
+                const tweetRef = admin.firestore().doc(`tweets/${args.id}`)
+
+                let tweetDoc = await tweetRef.get()
+                const tweet = tweetDoc.data() as Tweet
+                await tweetRef.update({likes: tweet.likes + 1})
+
+                tweetDoc = await tweetRef.get()
+                return tweetDoc.data()
+            } catch (error) {
+                throw new ApolloError(error)
+            }
+        }
+    }
 }
 
 const server = new ApolloServer({
